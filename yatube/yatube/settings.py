@@ -4,7 +4,7 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 SECRET_KEY = '#0ra%u8srw9dv#x(sm758mcari@l0mq68zpq*4*)*w$a_6ik4&'
 
-DEBUG = True
+DEBUG = False
 
 ALLOWED_HOSTS = [
     'localhost',
@@ -86,8 +86,6 @@ LANGUAGE_CODE = 'ru'
 
 TIME_ZONE = 'UTC'
 
-USE_I18N = False
-
 USE_L10N = True
 
 USE_TZ = True
@@ -97,8 +95,6 @@ STATIC_URL = '/static/'
 STATICFILES_DIRS = [os.path.join(BASE_DIR, 'static')]
 
 POSTS_QUANTITY = 10
-
-GROUP_CHARACTER_LIMIT = 20
 
 POST_CHARACTER_LIMIT = 15
 
@@ -121,7 +117,7 @@ MEDIA_TESTS = os.path.join(BASE_DIR, 'media_test')
 CACHES = {
     'default': {
         'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
-    }
+    },
 }
 
 CACHE_UPDATE = 20

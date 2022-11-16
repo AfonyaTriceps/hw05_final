@@ -1,10 +1,11 @@
-from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.db import models
 
 from core.utils import truncatechars
 
 User = get_user_model()
+
+GROUP_CHARACTER_LIMIT = 20
 
 
 class Group(models.Model):
@@ -17,11 +18,7 @@ class Group(models.Model):
         verbose_name_plural = 'группы'
 
     def __str__(self) -> str:
-        return (
-            truncatechars(self.title, settings.GROUP_CHARACTER_LIMIT) + '…'
-            if len(self.title) > settings.GROUP_CHARACTER_LIMIT
-            else self.title
-        )
+        return truncatechars(self.title, GROUP_CHARACTER_LIMIT)
 
 
 class Post(models.Model):
@@ -43,7 +40,7 @@ class Post(models.Model):
         verbose_name='сообщество',
         help_text='Группа, к которой будет относиться пост',
     )
-    image = models.ImageField('Картинка', upload_to='posts/', blank=True)
+    image = models.ImageField('картинка', upload_to='posts/', blank=True)
 
     class Meta:
         ordering = ('-pub_date',)
@@ -52,7 +49,7 @@ class Post(models.Model):
         verbose_name_plural = 'посты'
 
     def __str__(self) -> str:
-        return truncatechars(self.text, settings.POST_CHARACTER_LIMIT)
+        return truncatechars(self.text)
 
 
 class Comment(models.Model):
@@ -67,7 +64,8 @@ class Comment(models.Model):
         verbose_name='автор',
     )
     text = models.TextField(
-        'текст', help_text='Напишите свой комментарий к посту'
+        'текст',
+        help_text='Напишите свой комментарий к посту',
     )
     created = models.DateTimeField(
         'дата и время публикации',
@@ -81,7 +79,7 @@ class Comment(models.Model):
         verbose_name_plural = 'комментарии'
 
     def __str__(self) -> str:
-        return truncatechars(self.text, settings.POST_CHARACTER_LIMIT)
+        return truncatechars(self.text)
 
 
 class Follow(models.Model):
@@ -97,3 +95,6 @@ class Follow(models.Model):
         related_name='following',
         on_delete=models.CASCADE,
     )
+
+    def __str__(self) -> str:
+        return f'Подписчик: {self.user}, автор: {self.author}'

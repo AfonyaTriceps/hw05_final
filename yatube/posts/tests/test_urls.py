@@ -1,10 +1,9 @@
 from http import HTTPStatus
 
 from django.contrib.auth import get_user_model
-from django.core.cache import cache
 from django.test import Client, TestCase
-
-from posts.models import Group, Post
+from django.urls import reverse
+from mixer.backend.django import mixer
 
 User = get_user_model()
 
@@ -15,90 +14,163 @@ class PostURLTests(TestCase):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
-        cls.user = User.objects.create_user(username='auth')
+
+        cls.user = mixer.blend(User, username='TestUser')
+        cls.author = mixer.blend(User, username='author')
+
         cls.anon = Client()
         cls.authorized_client = Client()
-        cls.authorized_client.force_login(cls.user)
         cls.author_client = Client()
-        cls.author_client.force_login(cls.user)
 
-        cls.group = Group.objects.create(
-            title='Тестовая группа',
-            slug='test_slug',
-            description='Тестовое описание',
+        cls.authorized_client.force_login(cls.user)
+        cls.author_client.force_login(cls.author)
+
+        cls.group = mixer.blend('posts.Group', title='Тестовая группа')
+        cls.post = mixer.blend('posts.Post', author=cls.author)
+        cls.follow = mixer.blend(
+            'posts.Follow',
+            user=cls.user,
+            author=cls.author,
         )
-        cls.post = Post.objects.create(
-            author=cls.user,
-            text='Тестовый пост',
-            group=cls.group,
-        )
-        cls.templates_url_names = {
-            '/': 'posts/index.html',
-            f'/group/{cls.group.slug}/': 'posts/group_list.html',
-            f'/profile/{cls.user.username}/': 'posts/profile.html',
-            f'/posts/{cls.post.id}/': 'posts/post_detail.html',
-            f'/posts/{cls.post.id}/edit/': 'posts/post_create.html',
-            '/create/': 'posts/post_create.html',
+
+        cls.urls = {
+            'add_comment': reverse('posts:add_comment', args=(cls.post.id,)),
+            'follow_index': reverse('posts:follow_index'),
+            'group_list': reverse('posts:group_list', args=(cls.group.slug,)),
+            'index': reverse('posts:index'),
+            'post_create': reverse('posts:post_create'),
+            'post_detail': reverse('posts:post_detail', args=(cls.post.id,)),
+            'post_edit': reverse('posts:post_edit', args=(cls.post.id,)),
+            'profile': reverse('posts:profile', args=(cls.author,)),
+            'profile_follow': reverse(
+                'posts:profile_follow',
+                args=(cls.author,),
+            ),
+            'profile_unfollow': reverse(
+                'posts:profile_unfollow',
+                args=(cls.author,),
+            ),
         }
-        cls.POST_INDEX = ('/', 'posts/index.html')
-        cls.POST_GROUP = (f'/group/{cls.group.slug}/', 'posts/group_list.html')
-        cls.POST_PROFILE = (f'/profile/{cls.user}/', 'posts/profile.html')
-        cls.POST_URL = (f'/posts/{cls.post.id}/', 'posts/post_detail.html')
-        cls.POST_EDIT_URL = (
-            f'/posts/{POST_ID}/edit/',
-            'posts/post_create.html',
+
+    def test_http_statuses(self):
+        """Проверка статусов разными пользователями"""
+        httpstatuses = (
+            (self.urls.get('add_comment'), HTTPStatus.FOUND, self.anon),
+            (
+                self.urls.get('add_comment'),
+                HTTPStatus.FOUND,
+                self.authorized_client,
+            ),
+            (self.urls.get('follow_index'), HTTPStatus.FOUND, self.anon),
+            (
+                self.urls.get('follow_index'),
+                HTTPStatus.OK,
+                self.authorized_client,
+            ),
+            (self.urls.get('group_list'), HTTPStatus.OK, self.anon),
+            (self.urls.get('index'), HTTPStatus.OK, self.anon),
+            (self.urls.get('post_create'), HTTPStatus.FOUND, self.anon),
+            (
+                self.urls.get('post_create'),
+                HTTPStatus.OK,
+                self.authorized_client,
+            ),
+            (self.urls.get('post_detail'), HTTPStatus.OK, self.anon),
+            (self.urls.get('post_edit'), HTTPStatus.FOUND, self.anon),
+            (
+                self.urls.get('post_edit'),
+                HTTPStatus.FOUND,
+                self.authorized_client,
+            ),
+            (self.urls.get('post_edit'), HTTPStatus.OK, self.author_client),
+            (self.urls.get('profile'), HTTPStatus.OK, self.anon),
+            (self.urls.get('profile_follow'), HTTPStatus.FOUND, self.anon),
+            (
+                self.urls.get('profile_follow'),
+                HTTPStatus.FOUND,
+                self.authorized_client,
+            ),
+            (
+                self.urls.get('profile_follow'),
+                HTTPStatus.FOUND,
+                self.author_client,
+            ),
+            (self.urls.get('profile_unfollow'), HTTPStatus.FOUND, self.anon),
+            (
+                self.urls.get('profile_unfollow'),
+                HTTPStatus.FOUND,
+                self.authorized_client,
+            ),
+            (
+                self.urls.get('profile_unfollow'),
+                HTTPStatus.FOUND,
+                self.author_client,
+            ),
         )
-        cls.POST_CREATE_URL = ('/create/', 'posts/post_create.html')
-        cls.PUBLIC_URLS = [
-            cls.POST_INDEX,
-            cls.POST_GROUP,
-            cls.POST_PROFILE,
-            cls.POST_URL,
-        ]
-        cls.PRIVATE_URLS = [
-            cls.POST_EDIT_URL,
-            cls.POST_CREATE_URL,
-        ]
-        cls.URLS = cls.PUBLIC_URLS + cls.PRIVATE_URLS
+        for url, status, client in httpstatuses:
+            with self.subTest(url=url, status=status):
+                self.assertEqual(client.post(url).status_code, status)
 
-    def setUp(self):
-        cache.clear()
+    def test_redirects(self):
+        """Тест редиректов"""
+        redirects = (
+            (
+                self.urls.get('add_comment'),
+                f'/posts/{self.post.id}/',
+                self.authorized_client,
+            ),
+            (
+                self.urls.get('post_create'),
+                '/auth/login/?next=/create/',
+                self.anon,
+            ),
+            (
+                self.urls.get('post_edit'),
+                f'/auth/login/?next=/posts/{self.post.id}/edit/',
+                self.anon,
+            ),
+            (
+                self.urls.get('profile_follow'),
+                f'/profile/{self.post.author}/',
+                self.authorized_client,
+            ),
+            (
+                self.urls.get('profile_unfollow'),
+                f'/profile/{self.post.author}/',
+                self.authorized_client,
+            ),
+        )
+        for url, redirect_url, client in redirects:
+            with self.subTest(url=url, redirect_url=redirect_url):
+                self.assertRedirects(client.get(url), redirect_url)
 
-    def test_urls_exists_at_desired_location(self):
-        """Страницы в PUBLIC_URLS доступны любому пользователю"""
-        for address, templates in self.PUBLIC_URLS:
-            with self.subTest(address):
-                response = self.anon.get(address)
-                self.assertEqual(response.status_code, HTTPStatus.OK)
-
-    def test_post_create_url_exists_at_desired_location_authorized(self):
-        """Страницы /create/ доступна авторизованному пользователю."""
-        response = self.authorized_client.get('/create/', follow=True)
-        self.assertEqual(response.status_code, HTTPStatus.OK)
-
-    def test_post_post_id_edit_url_exists_at_author(self):
-        """Страница /posts/post_id/edit/ доступна только автору."""
-        response = self.author_client.get(f'/posts/{self.post.id}/edit/')
-        self.assertEqual(response.status_code, HTTPStatus.OK)
-
-    def test_unexisting_page_at_desired_location(self):
-        """Страница /unexisting_page/ возвращает код 404."""
-        response = self.anon.get('/unexisting_page/')
-        self.assertEqual(response.status_code, HTTPStatus.NOT_FOUND)
-
-    def test_create_edit_url_redirect_anonymous_on_auth_login(self):
-        """
-        Страницы create и edit перенаправят неавторизированного
-        пользователя на страницу логина.
-        """
-        for address, templates in self.PRIVATE_URLS:
-            with self.subTest(address=address):
-                response = self.anon.get(address)
-                self.assertRedirects(response, '/auth/login/?next=' + address)
-
-    def test_urls_uses_correct_template(self):
+    def test_templates(self):
         """URL-адрес использует соответствующий шаблон."""
-        for url, template in self.URLS:
+        templates = (
+            (
+                self.urls.get('follow_index'),
+                'posts/follow.html',
+                self.authorized_client,
+            ),
+            (self.urls.get('group_list'), 'posts/group_list.html', self.anon),
+            (self.urls.get('index'), 'posts/index.html', self.anon),
+            (
+                self.urls.get('post_create'),
+                'posts/post_create.html',
+                self.authorized_client,
+            ),
+            (
+                self.urls.get('post_detail'),
+                'posts/post_detail.html',
+                self.anon,
+            ),
+            (
+                self.urls.get('post_edit'),
+                'posts/post_create.html',
+                self.author_client,
+            ),
+            (self.urls.get('profile'), 'posts/profile.html', self.anon),
+        )
+        for url, template, client in templates:
             with self.subTest(url=url, template=template):
-                got = self.authorized_client.get(url)
-                self.assertTemplateUsed(got, template)
+                self.assertTemplateUsed(client.get(url), template)

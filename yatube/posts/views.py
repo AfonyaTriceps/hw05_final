@@ -17,7 +17,7 @@ def index(request: HttpRequest) -> HttpResponse:
         request,
         'posts/index.html',
         {
-            'page_obj': paginate(request, posts, settings.POSTS_QUANTITY),
+            'page_obj': paginate(request, posts),
         },
     )
 
@@ -30,7 +30,7 @@ def group_posts(request: HttpRequest, slug: str) -> HttpResponse:
         'posts/group_list.html',
         {
             'group': group,
-            'page_obj': paginate(request, posts, settings.POSTS_QUANTITY),
+            'page_obj': paginate(request, posts),
         },
     )
 
@@ -38,13 +38,16 @@ def group_posts(request: HttpRequest, slug: str) -> HttpResponse:
 def profile(request: HttpRequest, username: str) -> HttpResponse:
     author = get_object_or_404(User, username=username)
     posts = author.posts.select_related('author', 'group')
-    following = request.user.is_authenticated and author.following.exists()
+    following = (
+        request.user.is_authenticated
+        and request.user.follower.filter(author=author).exists()
+    )
     return render(
         request,
         'posts/profile.html',
         {
             'author': author,
-            'page_obj': paginate(request, posts, settings.POSTS_QUANTITY),
+            'page_obj': paginate(request, posts),
             'following': following,
         },
     )
@@ -52,16 +55,13 @@ def profile(request: HttpRequest, username: str) -> HttpResponse:
 
 def post_detail(request: HttpRequest, post_id: int) -> HttpResponse:
     post = get_object_or_404(Post, pk=post_id)
-    comments = post.comments.select_related('author')
     form = CommentForm()
     return render(
         request,
         'posts/post_detail.html',
         {
-            'author': post.author,
             'post': post,
             'form': form,
-            'comments': comments,
         },
     )
 
@@ -89,7 +89,9 @@ def post_edit(request: HttpRequest, post_id: int) -> HttpResponse:
     if request.user != post.author:
         return redirect('posts:index')
     form = PostForm(
-        request.POST or None, files=request.FILES or None, instance=post
+        request.POST or None,
+        files=request.FILES or None,
+        instance=post,
     )
     if form.is_valid():
         form.save()
@@ -125,7 +127,7 @@ def follow_index(request):
         request,
         'posts/follow.html',
         {
-            'page_obj': paginate(request, posts, settings.POSTS_QUANTITY),
+            'page_obj': paginate(request, posts),
         },
     )
 
@@ -133,17 +135,14 @@ def follow_index(request):
 @login_required
 def profile_follow(request, username):
     author = get_object_or_404(User, username=username)
-    if request.user == author:
-        return redirect('posts:profile', username=username)
-    Follow.objects.get_or_create(user=request.user, author=author)
+    if request.user != author:
+        Follow.objects.get_or_create(user=request.user, author=author)
     return redirect('posts:profile', username=username)
 
 
 @login_required
 def profile_unfollow(request, username):
     author = get_object_or_404(User, username=username)
-    if request.user == author:
-        return redirect('posts:profile', username=username)
-    following = get_object_or_404(Follow, user=request.user, author=author)
-    following.delete()
+    if request.user != author:
+        get_object_or_404(Follow, user=request.user, author=author).delete()
     return redirect('posts:profile', username=username)

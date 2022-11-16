@@ -1,7 +1,13 @@
-{% extends "base.html" %}
-{% block title %}Internal Server Error{% endblock %}
-{% block content %}
-  <h1>Internal Server Error 500</h1>
-  <p>Не удалось обработать запрос к странице</p>
-  <p href="{% url 'posts:index' %}">На главную</p>
+{% extends "core/errors.html" %}
+{% block errors %}
+  <div class="mainbox">
+    <div class="err">5</div>
+    <i class="far fa-question-circle fa-spin"></i>
+    <div class="err2">0</div>
+    <div class="msg">
+      Уупс!
+      <p>Что-то пошло не так :(</p>
+      <p><a href="{% url 'posts:index' %}">Идите на главную</a></p>
+    </div>
+  </div>
 {% endblock %}
