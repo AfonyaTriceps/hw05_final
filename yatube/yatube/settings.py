@@ -1,4 +1,10 @@
+import sentry_sdk
 import os
+from dotenv import load_dotenv
+from sentry_sdk.integrations.django import DjangoIntegration
+
+
+load_dotenv()
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -11,6 +17,8 @@ ALLOWED_HOSTS = [
     '127.0.0.1',
     '[::1]',
     'testserver',
+    '51.250.26.146',
+    'revuex.ddns.net',
 ]
 
 INSTALLED_APPS = [
@@ -62,8 +70,12 @@ WSGI_APPLICATION = 'yatube.wsgi.application'
 
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': os.path.join(BASE_DIR, 'db.sqlite3'),
+        'ENGINE': os.getenv('DB_ENGINE', 'django.db.backends.postgresql'),
+        'NAME': os.getenv('DB_NAME'),
+        'USER': os.getenv('POSTGRES_USER'),
+	'PASSWORD': os.getenv('POSTGRES_PASSWORD'),
+	'HOST': os.getenv('DB_HOST'),
+	'PORT': os.getenv('DB_PORT'),
     },
 }
 
@@ -92,7 +104,7 @@ USE_TZ = True
 
 STATIC_URL = '/static/'
 
-STATICFILES_DIRS = [os.path.join(BASE_DIR, 'static')]
+STATIC_ROOT = os.path.join(BASE_DIR, 'static/')
 
 POSTS_QUANTITY = 10
 
@@ -121,3 +133,8 @@ CACHES = {
 }
 
 CACHE_UPDATE = 20
+
+sentry_sdk.init(
+    dsn='https://f8acd87e46f74472ae35d231c397f5d6@o4504908228329472.ingest.sentry.io/4504912249487360', 
+    integrations=[DjangoIntegration()],
+)
