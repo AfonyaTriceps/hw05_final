@@ -9,7 +9,7 @@
 
 ### Используемый стек
 
-Python 3, Django, PostgreSQL, Unittest, Gunicorn, Nginx.
+Python 3, Django, SQLite, Unittest, Gunicorn, Nginx.
 
 ### Как запустить проект
 
